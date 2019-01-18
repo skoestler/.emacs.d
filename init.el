@@ -20,6 +20,9 @@
      ((ns-appearance . dark)
       (ns-transparent-titlebar . t))))
  '(global-prettify-symbols-mode t)
+ '(haskell-hoogle-command "~/.cabal/bin/hoogle")
+ '(haskell-mode-stylish-haskell-path "~/.cabal/bin/stylish-haskell")
+ '(haskell-stylish-on-save t)
  '(hl-paren-background-colors
    (quote
     ("#4C566A" "#4C566A" "#4C566A" "#4C566A" "#4C566A" "#4C566A" "#4C566A")))
@@ -35,7 +38,7 @@
      ("gnu" . "https://elpa.gnu.org/packages/"))))
  '(package-selected-packages
    (quote
-    (smartparens use-package-chords highlight-parentheses rainbow-delimiters rainbow-delimiters-mode doom-modeline aggressive-indent clj-refactor cider paredit counsel doom-themes doom-theme avy-zap avy which-key use-package)))
+    (haskell-mode smartparens use-package-chords highlight-parentheses rainbow-delimiters rainbow-delimiters-mode doom-modeline aggressive-indent clj-refactor cider paredit counsel doom-themes doom-theme avy-zap avy which-key use-package)))
  '(ring-bell-function (quote ignore))
  '(scroll-bar-mode nil)
  '(smartparens-global-strict-mode t)
@@ -47,7 +50,7 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(default ((t (:inherit nil :stipple nil :background "#2F3841" :foreground "#c0c5ce" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 150 :width normal :foundry "nil" :family "Hack")))))
+ '(default ((t (:inherit nil :stipple nil :background "#2F3841" :foreground "#c0c5ce" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :height 160 :width normal :foundry "nil" :family "Hack")))))
 
 (package-initialize)
 
@@ -150,9 +153,91 @@
 				(match-end 1) "∘"))))
      ("\\(#\\)("
       (0 (progn (compose-region (match-beginning 1)
-				(match-end 1) "ƒ"))))
+				(match-end 1) "λ"))))
      ("\\(#\\){"
       (0 (progn (compose-region (match-beginning 1)
 				(match-end 1) "∈")))))))
 
 (clojure/fancify-symbols 'clojure-mode)
+
+(defun haskell-font-lock-dot-is-not-composition (start)
+  "Return non-nil if the \".\" at START is not a composition operator.
+This is the case if the \".\" is part of a \"forall <tvar> . <type>\"."
+  (save-excursion
+    (goto-char start)
+    (or (re-search-backward "\\<forall\\>[^.\"]*\\="
+                            (line-beginning-position) t)
+        (not (or
+              (string= " " (string (char-after start)))
+              (null (char-before start))
+              (string= " " (string (char-before start))))))))
+
+(use-package haskell-mode
+  :ensure t
+  :hook
+  (haskell-mode . interactive-haskell-mode)
+  (haskell-mode . (lambda ()
+		    (push '("\\" . ?λ) prettify-symbols-alist)
+		    (push '("." ?∘ haskell-font-lock-dot-is-not-composition) prettify-symbols-alist)
+		    ))
+  ;;(haskell-mode . fira-code-mode)
+  )
+
+(defun fira-code-mode--make-alist (list)
+  "Generate prettify-symbols alist from LIST."
+  (let ((idx -1))
+    (mapcar
+     (lambda (s)
+       (setq idx (1+ idx))
+       (let* ((code (+ #Xe100 idx))
+              (width (string-width s))
+              (prefix ())
+              (suffix '(?\s (Br . Br)))
+              (n 1))
+	 (while (< n width)
+	   (setq prefix (append prefix '(?\s (Br . Bl))))
+	   (setq n (1+ n)))
+	 (cons s (append prefix suffix (list (decode-char 'ucs code))))))
+     list)))
+
+(defconst fira-code-mode--ligatures
+  '("www" "**" "***" "**/" "*>" "*/" "\\\\" "\\\\\\"
+    "{-" "[]" "::" ":::" ":=" "!!" "!=" "!==" "-}"
+    "--" "---" "-->" "->" "->>" "-<" "-<<" "-~"
+    "#{" "#[" "##" "###" "####" "#(" "#?" "#_" "#_("
+    ".-" ".=" ".." "..<" "..." "?=" "??" ";;" "/*"
+    "/**" "/=" "/==" "/>" "//" "///" "&&" "||" "||="
+    "|=" "|>" "^=" "$>" "++" "+++" "+>" "=:=" "=="
+    "===" "==>" "=>" "=>>" "<=" "=<<" "=/=" ">-" ">="
+    ">=>" ">>" ">>-" ">>=" ">>>" "<*" "<*>" "<|" "<|>"
+    "<$" "<$>" "<!--" "<-" "<--" "<->" "<+" "<+>" "<="
+    "<==" "<=>" "<=<" "<>" "<<" "<<-" "<<=" "<<<" "<~"
+    "<~~" "</" "</>" "~@" "~-" "~=" "~>" "~~" "~~>" "%%"
+    "x" ":" "+" "+" "*"))
+
+(defvar fira-code-mode--old-prettify-alist)
+
+(defun fira-code-mode--enable ()
+  "Enable Fira Code ligatures in current buffer."
+  (setq-local fira-code-mode--old-prettify-alist prettify-symbols-alist)
+  (setq-local prettify-symbols-alist (append (fira-code-mode--make-alist fira-code-mode--ligatures) fira-code-mode--old-prettify-alist))
+  (prettify-symbols-mode t))
+
+(defun fira-code-mode--disable ()
+  "Disable Fira Code ligatures in current buffer."
+  (setq-local prettify-symbols-alist fira-code-mode--old-prettify-alist)
+  (prettify-symbols-mode -1))
+
+(define-minor-mode fira-code-mode
+  "Fira Code ligatures minor mode"
+  :lighter " Fira Code"
+  (setq-local prettify-symbols-unprettify-at-point 'right-edge)
+  (if fira-code-mode
+      (fira-code-mode--enable)
+    (fira-code-mode--disable)))
+
+(defun fira-code-mode--setup ()
+  "Setup Fira Code Symbols"
+  (set-fontset-font t '(#Xe100 . #Xe16f) "Fira Code Symbol"))
+
+(provide 'fira-code-mode)
