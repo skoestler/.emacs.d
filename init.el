@@ -11,6 +11,7 @@
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(alchemist-hooks-test-on-save t)
  '(clojure-align-forms-automatically t)
  '(custom-safe-themes
    (quote
@@ -133,6 +134,9 @@
 (use-package clj-refactor
   :ensure t
   :hook (clojure-mode . clj-refactor-mode))
+
+(use-package alchemist
+  :ensure t)
 
 (defun clojure/fancify-symbols (mode)
   "Pretty symbols for Clojure's anonymous functions and sets,
